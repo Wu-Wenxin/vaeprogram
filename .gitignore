@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local datasets
+data/
+
+# Generated training outputs
+outputs/
+*.ckpt
+*.pth
+*.pt
+*.log
