@@ -10,6 +10,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -62,6 +63,16 @@ def main() -> None:
     cfg = load_config(args.config)
     # 应用命令行临时配置。
     cfg = apply_overrides(cfg, args.override)
+    # 新训练时创建精确到秒的独立运行目录，避免覆盖以前的实验结果。
+    if args.resume is None:
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = Path(cfg.train.output_dir) / run_id
+        # 同一秒内出现重名时直接报错，不复用或覆盖已有目录。
+        run_dir.mkdir(parents=True, exist_ok=False)
+        cfg.train.output_dir = str(run_dir)
+    # 断点续训时继续写入 checkpoint 所在的原运行目录。
+    else:
+        cfg.train.output_dir = str(Path(args.resume).resolve().parent)
     # 固定随机种子。
     set_global_seed(cfg.train.seed)
     
