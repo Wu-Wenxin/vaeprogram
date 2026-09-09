@@ -11,7 +11,6 @@ from vae_wwx.viz.recon import (
     plot_reconstruction_channels_overlay,
 )
 
-
 __all__ = [
     "plot_latent_scatter",
     "plot_loss_curves",

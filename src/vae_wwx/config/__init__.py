@@ -7,6 +7,7 @@ from vae_wwx.config.loader import (
 from vae_wwx.config.schema import (
     AnnealConfig,
     DataConfig,
+    DistanceActivityConfig,
     ExperimentConfig,
     KLConfig,
     LossConfig,
@@ -17,10 +18,10 @@ from vae_wwx.config.schema import (
     VizConfig,
 )
 
-
 __all__ = [
     "AnnealConfig",
     "DataConfig",
+    "DistanceActivityConfig",
     "ExperimentConfig",
     "KLConfig",
     "LossConfig",

@@ -28,7 +28,11 @@ def plot_loss_curves(
     if not train_history:
         return
     # 自动找出需要绘制的损失，排除epoch和权重。
-    auto_keys = [k for k in train_history[0] if k not in {"epoch"} and not k.startswith("w_")]
+    auto_keys = [
+        k
+        for k in train_history[0]
+        if k != "epoch" and not k.startswith("weight_")
+    ]
     keys = keys or auto_keys
     # 取得所有epoch。
     epochs = [h["epoch"] for h in train_history]

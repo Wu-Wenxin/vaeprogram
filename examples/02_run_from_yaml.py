@@ -10,16 +10,15 @@ Usage::
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 from pathlib import Path
 
 import torch
-from torch import Tensor
 from torch.utils.data import DataLoader
 
 from vae_wwx.config.loader import apply_overrides, load_config
 from vae_wwx.data import build_dataset
 from vae_wwx.losses.builder import build_composite_loss
+from vae_wwx.losses.geometric import AngularPrototypeLoss
 from vae_wwx.models.factory import build_vae
 from vae_wwx.train.checkpoint import load_checkpoint
 from vae_wwx.train.trainer import Trainer
@@ -63,15 +62,8 @@ def main() -> None:
     cfg = load_config(args.config)
     # 应用命令行临时配置。
     cfg = apply_overrides(cfg, args.override)
-    # 新训练时创建精确到秒的独立运行目录，避免覆盖以前的实验结果。
-    if args.resume is None:
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_dir = Path(cfg.train.output_dir) / run_id
-        # 同一秒内出现重名时直接报错，不复用或覆盖已有目录。
-        run_dir.mkdir(parents=True, exist_ok=False)
-        cfg.train.output_dir = str(run_dir)
-    # 断点续训时继续写入 checkpoint 所在的原运行目录。
-    else:
+    # 断点续训时继续写入checkpoint所在的原运行目录。
+    if args.resume is not None:
         cfg.train.output_dir = str(Path(args.resume).resolve().parent)
     # 固定随机种子。
     set_global_seed(cfg.train.seed)
@@ -81,15 +73,33 @@ def main() -> None:
         f"("
         f"{cfg.model.kind} {cfg.model.backbone} | "
         f"z={cfg.model.latent_dim} | "
-        f"beta={cfg.loss.kl.weight}"
+        f"beta={cfg.loss.kl.weight} | "
+        f"idle_in={cfg.loss.idle_anchor.input} | "
+        f"ang_in={cfg.loss.angular_prototype.input}"
         f")"
     )
     # 根据配置创建数据集。
     dataset = build_dataset(cfg.data)
     # 根据配置创建VAE模型。
     model = build_vae(cfg.model, cfg.data)
+    # Angular Prototype Lossを作成する
+    angular_loss = AngularPrototypeLoss(
+        latent_dim=cfg.model.latent_dim,
+        num_classes=cfg.data.n_classes - 1,
+        idle_label=0,
+        temperature=cfg.loss.angular_prototype.temperature,
+    )
+
+    # optimizerとcheckpointの対象に含めるため、modelへ登録する
+    model.add_module(
+        "angular_prototype_loss",
+        angular_loss,
+    )
     # 根据配置创建组合损失。
-    loss = build_composite_loss(cfg.loss)
+    loss = build_composite_loss(
+        cfg.loss,
+        angular_loss=angular_loss,
+    )
     # 创建Trainer。
     trainer = Trainer(model=model, loss=loss, dataset=dataset, cfg=cfg)
     # 默认从第0轮开始训练。
@@ -125,50 +135,59 @@ def main() -> None:
         outputs = model(sample["x"])
     # 保存原项目的4样本×4通道重建图。
     plot_reconstruction_1d(
-        sample["x"], 
-        outputs["x_hat"], 
-        out / f"recon{plot_cfg}.png", 
-        title=f"{cfg.name} recon{plot_cfg}"
+        sample["x"],
+        outputs["x_hat"],
+        out / f"recon{plot_cfg}.png",
+        title=f"{cfg.name} recon{plot_cfg}",
     )
 
-    # 根据配置选择latent图的数据来源。
-    if cfg.viz.latent_source == "val":
-        latent_loader = trainer.val_loader
-        latent_name = "val_"
-    # 配置为all时，读取训练集和验证集的全部数据。
-    else:
-        latent_loader = DataLoader(
+    # val时只绘制验证集；all时同时绘制验证集和全部数据。
+    latent_loaders = {"val": trainer.val_loader}
+    if cfg.viz.latent_source == "all":
+        latent_loaders["all"] = DataLoader(
             dataset,
             batch_size=cfg.data.batch_size,
             shuffle=False,
         )
-        latent_name = "all_"
-    # 潜在散布図（many-to-many では mu が (B, W, D) なので flatten）
-    # 收集需要绘制的潜在变量和标签。
-    zs, ys = [], []
-    with torch.no_grad():
-        for batch in latent_loader:
-            # 将当前batch移动到模型设备。
-            batch = {k: v.to(trainer.device) for k, v in batch.items()}
-            # 取得VanillaVAE输出。
-            out_dict = model(batch["x"])
-            # 保存mu和标签。
-            zs.append(out_dict["mu"].cpu())
-            ys.append(batch["y"].cpu())
-    # 合并并绘制潜在空间。
-    if zs:
-        z_all = torch.cat(zs)
-        y_all = torch.cat(ys) if ys else None
-        
-        plot_latent_scatter(z_all,
-                            y_all,
-                            out / f"latent{plot_cfg}.png", 
-                            title=f"{latent_name} latent{plot_cfg}")
+
+    for source_name, latent_loader in latent_loaders.items():
+        # 收集当前数据来源的潜在变量和标签。
+        zs, ys = [], []
+        with torch.no_grad():
+            for batch in latent_loader:
+                # 将当前batch移动到模型设备。
+                batch = {k: v.to(trainer.device) for k, v in batch.items()}
+                # 取得VanillaVAE输出。
+                out_dict = model(batch["x"])
+                # 保存mu和标签。
+                zs.append(out_dict["mu"].cpu())
+                ys.append(batch["y"].cpu())
+        # 合并并绘制潜在空间。
+        if zs:
+            z = torch.cat(zs)
+            y = torch.cat(ys) if ys else None
+
+            plot_latent_scatter(
+                z,
+                y,
+                out / f"latent_{source_name}{plot_cfg}.png",
+                title=f"{source_name} latent{plot_cfg}",
+            )
     # 绘制训练和验证损失曲线
-    plot_loss_curves(history.train,
-                     history.val,
-                     out / f"curves{plot_cfg}.png",
-                     title=f"{latent_name} losses{plot_cfg}")
+    plot_loss_curves(
+        history.train,
+        history.val,
+        out / f"curves{plot_cfg}.png",
+        keys=[
+            "total",
+            "recon",
+            "kl",
+            "idle_anchor",
+            "angular_prototype",
+            "distance_activity",
+        ],
+        title=f"losses{plot_cfg}",
+    )
     print(f"完了．出力: {out.resolve()}")
 
 

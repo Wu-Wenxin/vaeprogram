@@ -149,8 +149,34 @@ class TemporalSmoothnessConfig:
     weight: float = 0.0
     order: int = 1
     target: Literal["mu", "z"] = "mu"
-    
 
+
+@dataclass
+class IdleAnchorConfig:
+    """idle anchor lossの設定。"""
+
+    weight: float = 0.0
+    # 几何损失使用后验分布中心 mu，或使用重参数化后的采样 z。
+    input: Literal["mu", "z"] = "mu"
+
+
+@dataclass
+class AngularPrototypeConfig:
+    """angular prototype lossの設定。"""
+
+    weight: float = 0.0
+    temperature: float = 0.1
+    # 默认使用稳定的 mu；z 用于带采样噪声的对照实验。
+    input: Literal["mu", "z"] = "mu"
+
+
+@dataclass
+class DistanceActivityConfig:
+    """idleからの距離とEMG活動量を対応させる損失の設定。"""
+
+    weight: float = 0.0
+    # 先生の案ではサンプリング済み潜在変数zを使用する。
+    input: Literal["mu", "z"] = "z"
 
 
 @dataclass
@@ -162,7 +188,13 @@ class LossConfig:
     recon: ReconConfig = field(default_factory=ReconConfig)
     # VAE必须使用的KL损失。
     kl: KLConfig = field(default_factory=KLConfig)
-
+    idle_anchor: IdleAnchorConfig = field(default_factory=IdleAnchorConfig)
+    angular_prototype: AngularPrototypeConfig = field(
+        default_factory=AngularPrototypeConfig
+    )
+    distance_activity: DistanceActivityConfig = field(
+        default_factory=DistanceActivityConfig
+    )
 
 
 @dataclass

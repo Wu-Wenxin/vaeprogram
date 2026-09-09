@@ -18,7 +18,7 @@ model:
   # 特征提取网络结构
   # 这个模型内部用什么网络去编码/解码信号
   backbone: simple1d  # 例如 simple1d、resnet1d
-  latent_dim: 16
+  latent_dim: 2
   hidden_channels: [16, 32, 64, 128]
 
 # 损失函数配置
@@ -33,6 +33,19 @@ loss:
     anneal:
       kind: linear
       end_step: 500
+  # idleクラスを原点付近に固定する損失
+  idle_anchor:
+    weight: 0.1
+    input: z  # mu: 稳定中心；z: 重参数化后的采样点
+  # 動作クラスの方向を分離する損失
+  angular_prototype:
+    weight: 0.01
+    temperature: 0.1
+    input: z  # 改为 z 可进行带采样噪声的对照实验
+  # idleからの潜在距離と標準化前EMG RMSの相関を最大化する損失
+  distance_activity:
+    weight: 0.0
+    input: z
 
 # Adam优化器配置
 optim:
@@ -41,9 +54,9 @@ optim:
 
 # 训练过程配置
 train:
-  epochs: 50
+  epochs: 500
   grad_clip: 1.0
-  output_dir: outputs/rectify_smooth_hirota/exp0703_hirota_trial1
+  output_dir: outputs/fixed_beta0.05/fixed_lr0.005/fixed_z2/compare_input_mu_z/input_z/idle0.1_ang0.01_tau0.1/epoch500
   seed: 0
   device: auto
 
