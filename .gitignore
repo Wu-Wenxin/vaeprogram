@@ -15,7 +15,7 @@ venv/
 .mypy_cache/
 
 # Local datasets
-data/
+/data/
 
 # Generated training outputs
 outputs/

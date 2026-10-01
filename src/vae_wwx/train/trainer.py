@@ -6,13 +6,15 @@ Lightning 等のフレームワークには依存せず標準 PyTorch だけで�
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import torch
+import yaml
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
@@ -21,6 +23,13 @@ from vae_wwx.train.checkpoint import save_checkpoint
 from vae_wwx.train.loops import eval_epoch, train_epoch
 from vae_wwx.utils.logging_setup import setup_logging
 from vae_wwx.utils.seed import set_global_seed
+
+
+class _ConfigDumper(yaml.SafeDumper):
+    """配置保持分层排版，列表和元组使用行内格式。"""
+
+    def represent_sequence(self, tag, sequence, flow_style=None):
+        return super().represent_sequence(tag, sequence, flow_style=True)
 
 
 @dataclass
@@ -77,6 +86,12 @@ class Trainer:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # 创建日志记录器，并把日志写入train.log。
         self.logger: logging.Logger = setup_logging(log_file=self.output_dir / "train.log")
+        # 覆盖保存实际运行的完整参数，简单列表使用行内格式。
+        config_yaml = yaml.dump(
+            asdict(cfg), Dumper=_ConfigDumper, allow_unicode=True, sort_keys=False
+        )
+        (self.output_dir / "config.yaml").write_text(config_yaml, encoding="utf-8")
+        self.logger.info("Resolved device: %s", self.device)
         # 创建专门用于数据划分的随机数生成器。
         gen = torch.Generator().manual_seed(cfg.train.seed)
         # 按完整CSV文件划分训练集和验证集。
@@ -94,6 +109,13 @@ class Trainer:
             self.train_set, self.val_set = random_split(
                 dataset, [n_train, n_val], generator=gen
             )
+        # 训练/验证 Subset 共用数据集：只用训练窗口拟合，再统一变换。
+        if hasattr(dataset, "standardize_from_train"):
+            stats = dataset.standardize_from_train(self.train_set.indices)
+            (self.output_dir / "normalization.json").write_text(
+                json.dumps(stats, indent=2), encoding="utf-8"
+            )
+            self.logger.info("Shared channel standardization fitted on training windows")
         # 创建训练DataLoader，并在每个epoch打乱训练数据。
         self.train_loader = DataLoader(
             self.train_set, batch_size=cfg.data.batch_size, shuffle=True, drop_last=False
@@ -277,15 +299,21 @@ class Trainer:
     def _log_epoch(self, epoch: int, train: dict[str, float], val: dict[str, float]) -> None:
         """将当前epoch的损失写入日志。"""
         # 按固定顺序显示主要损失。
-        priority = ["total", "recon", "kl"]
+        priority = ["total", "recon", "kl", "idle_anchor", "angular_prototype"]
         # 取得当前实际存在的训练指标。
         train_keys = [k for k in priority if k in train]
-        # 补充其他可能存在的训练指标。
-        train_keys += sorted(k for k in train if k not in train_keys and k != "epoch")
+        # 补充其他损失指标，日志中不显示权重。
+        train_keys += sorted(
+            k for k in train
+            if k not in train_keys and k != "epoch" and not k.startswith("weight_")
+        )
         # 取得当前实际存在的验证指标。
         val_keys = [k for k in priority if k in val]
-        # 补充其他可能存在的验证指标。
-        val_keys += sorted(k for k in val if k not in val_keys and k != "epoch")
+        # 补充其他验证损失指标，日志中不显示权重。
+        val_keys += sorted(
+            k for k in val
+            if k not in val_keys and k != "epoch" and not k.startswith("weight_")
+        )
         # 将训练指标转换成字符串。
         train_str = " ".join(f"{k}={train[k]:.4f}" for k in train_keys)
         # 将验证指标转换成字符串。
