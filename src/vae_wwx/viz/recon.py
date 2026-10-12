@@ -20,7 +20,7 @@ def plot_reconstruction_1d(
     x_hat: Tensor,
     save_path: str | Path,
     n_samples: int = 4,
-    n_channels_show: int = 4,
+    n_channels_show: int = 8,
     title: str = "Reconstruction (1D)",
 ) -> None:
     """1D 信号の再構成を ``(サンプル × チャネル)`` グリッドで描画．

@@ -38,8 +38,8 @@ def setup_logging(level: int = logging.INFO, log_file: str | Path | None = None)
     if log_file is not None:
         # 确保日志文件所在目录存在。
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-        # 创建文件日志处理器。
-        file_handler = logging.FileHandler(log_file)
+        # 每次启动训练时覆盖旧日志，避免多次运行的记录混在一起。
+        file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
         # 给文件日志应用相同格式。
         file_handler.setFormatter(formatter)
         # 将文件处理器加入根日志记录器。

@@ -214,7 +214,18 @@ class RealEMGDataset(Dataset):
         # x 的维度是 (窗口, 通道, 时间)；只合并窗口和时间维度。
         train_x = self.x[train_indices].double()
         mean = train_x.mean(dim=(0, 2), keepdim=True)
-        std = train_x.std(dim=(0, 2), unbiased=False, keepdim=True).clamp_min(1e-6)
+        # std = train_x.std(dim=(0, 2), unbiased=False, keepdim=True).clamp_min(1e-6)
+        # 8通道公用一个标准差
+        std = ((train_x - mean).square().mean().sqrt().clamp_min(1e-6))
+        
+        # # active-only
+        # train_labels = self.y[train_indices]
+        # # 只用 active 窗口（label > 0）计算 mean 和 std
+        # active_mask = train_labels > 0
+        # active_indices = torch.tensor(train_indices)[active_mask].tolist()
+        # train_x = self.x[active_indices].double()
+        # mean = train_x.mean(dim=(0, 2), keepdim=True)
+        # std = train_x.std(dim=(0, 2), unbiased=False, keepdim=True).clamp_min(1e-6)        
 
         # 训练与验证窗口使用完全相同的参数；原始 emg_rms 不变。
         self.x = (self.x - mean.float()) / std.float()

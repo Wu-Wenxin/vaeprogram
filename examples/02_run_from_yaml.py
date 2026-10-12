@@ -82,19 +82,20 @@ def main() -> None:
     dataset = build_dataset(cfg.data)
     # 根据配置创建VAE模型。
     model = build_vae(cfg.model, cfg.data)
-    # Angular Prototype Lossを作成する
-    angular_loss = AngularPrototypeLoss(
-        latent_dim=cfg.model.latent_dim,
-        num_classes=cfg.data.n_classes - 1,
-        idle_label=0,
-        temperature=cfg.loss.angular_prototype.temperature,
-    )
-
-    # optimizerとcheckpointの対象に含めるため、modelへ登録する
-    model.add_module(
-        "angular_prototype_loss",
-        angular_loss,
-    )
+    # 权重为0时不创建Angular Prototype模块。
+    angular_loss = None
+    if cfg.loss.angular_prototype.weight != 0.0:
+        angular_loss = AngularPrototypeLoss(
+            latent_dim=cfg.model.latent_dim,
+            num_classes=cfg.data.n_classes - 1,
+            idle_label=0,
+            temperature=cfg.loss.angular_prototype.temperature,
+        )
+        # optimizerとcheckpointの対象に含めるため、modelへ登録する
+        model.add_module(
+            "angular_prototype_loss",
+            angular_loss,
+        )
     # 根据配置创建组合损失。
     loss = build_composite_loss(
         cfg.loss,
@@ -178,14 +179,8 @@ def main() -> None:
         history.train,
         history.val,
         out / f"curves{plot_cfg}.png",
-        keys=[
-            "total",
-            "recon",
-            "kl",
-            "idle_anchor",
-            "angular_prototype",
-            "distance_activity",
-        ],
+        # 只画实际启用的损失，避免零权重项和空白子图。
+        keys=["total", *[term.name for term in loss.terms]],
         title=f"losses{plot_cfg}",
     )
     print(f"完了．出力: {out.resolve()}")

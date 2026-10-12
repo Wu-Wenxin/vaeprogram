@@ -55,9 +55,12 @@ def build_kl_term(cfg: LossConfig) -> LossTerm:
     return LossTerm(name="kl", fn=fn, schedule=build_kl_schedule(cfg.kl))
 
 
-def build_idle_anchor_term(cfg: LossConfig) -> LossTerm:
+def build_idle_anchor_term(cfg: LossConfig) -> LossTerm | None:
     """Idle Anchor Lossを作成する。"""
 
+    # 权重为0时不构建、也不计算该损失。
+    if cfg.idle_anchor.weight == 0.0:
+        return None
     idle_loss = IdleAnchorLoss(idle_label=0)
     latent_input = cfg.idle_anchor.input
     if latent_input not in ("mu", "z"):
@@ -65,10 +68,7 @@ def build_idle_anchor_term(cfg: LossConfig) -> LossTerm:
             f"idle_anchor.input must be 'mu' or 'z', got {latent_input!r}"
         )
 
-    def fn(
-        out: dict[str, Any],
-        batch: dict[str, Any],
-    ) -> Tensor:
+    def fn(out: dict[str, Any], batch: dict[str, Any]) -> Tensor:
         return idle_loss(out[latent_input], batch["y"])
 
     return LossTerm(
@@ -82,20 +82,20 @@ def build_idle_anchor_term(cfg: LossConfig) -> LossTerm:
 
 def build_angular_prototype_term(
     cfg: LossConfig,
-    angular_loss: AngularPrototypeLoss,
-) -> LossTerm:
+    angular_loss: AngularPrototypeLoss | None,
+) -> LossTerm | None:
     """Angular Prototype Lossを作成する。"""
-
+    
+    # 权重为0或没有传入模块时不构建、也不计算该损失。
+    if cfg.angular_prototype.weight == 0.0 or angular_loss is None:
+        return None
     latent_input = cfg.angular_prototype.input
     if latent_input not in ("mu", "z"):
         raise ValueError(
             f"angular_prototype.input must be 'mu' or 'z', got {latent_input!r}"
         )
 
-    def fn(
-        out: dict[str, Any],
-        batch: dict[str, Any],
-    ) -> Tensor:
+    def fn(out: dict[str, Any], batch: dict[str, Any]) -> Tensor:
         return angular_loss(out[latent_input], batch["y"])
 
     return LossTerm(
@@ -147,17 +147,12 @@ def build_composite_loss(
     terms: list[LossTerm] = [
         build_recon_term(cfg),
         build_kl_term(cfg),
-        build_idle_anchor_term(cfg),
     ]
-    distance_activity_term = build_distance_activity_term(cfg)
-    if distance_activity_term is not None:
-        terms.append(distance_activity_term)
-    if angular_loss is not None:
-        terms.append(
-            build_angular_prototype_term(
-                cfg,
-                angular_loss,
-            )
-        )
+    extra_terms = [
+        build_idle_anchor_term(cfg),
+        build_distance_activity_term(cfg),
+        build_angular_prototype_term(cfg, angular_loss)
+    ]
+    terms.extend(term for term in extra_terms if term is not None)
     # 将多个损失项组合成一个总损失。
     return CompositeLoss(terms)

@@ -2,10 +2,10 @@ name: real_emg
 
 data:
   name: real_emg
-  data_dir: data/rectify_smooth/exp0703_hirota_trial1
+  data_dir: data/rectify_smooth/exp0427_wwx
   channels: 8
   length: 500
-  stride: 100
+  stride: 250
   n_classes: 5
   batch_size: 64
   val_ratio: 0.2
@@ -27,7 +27,7 @@ loss:
     kind: mse
     weight: 1.0
   kl:
-    weight: 0.05
+    weight: 1.0
     free_bits: 0.0
     warmup_steps: 100
     anneal:
@@ -35,11 +35,11 @@ loss:
       end_step: 500
   # idleクラスを原点付近に固定する損失
   idle_anchor:
-    weight: 0.1
+    weight: 0
     input: z  # mu: 稳定中心；z: 重参数化后的采样点
   # 動作クラスの方向を分離する損失
   angular_prototype:
-    weight: 0.01
+    weight: 0
     temperature: 0.1
     input: z  # 改为 z 可进行带采样噪声的对照实验
   # idleからの潜在距離と標準化前EMG RMSの相関を最大化する損失
@@ -49,12 +49,12 @@ loss:
 
 # Adam优化器配置
 optim:
-  lr: 0.005
+  lr: 0.001
   weight_decay: 0.0
 
 # 训练过程配置
 train:
-  epochs: 500
+  epochs: 50
   grad_clip: 1.0
   output_dir: outputs/fixed_beta0.05/fixed_lr0.005/fixed_z2/compare_input_mu_z/input_z/idle0.1_ang0.01_tau0.1/epoch500
   seed: 0
