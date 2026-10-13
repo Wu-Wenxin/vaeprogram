@@ -17,6 +17,10 @@ venv/
 # Local datasets
 /data/
 
+/tests/
+/tmp/
+/output/
+
 # Generated training outputs
 outputs/
 *.ckpt

@@ -11,6 +11,8 @@ data:
   val_ratio: 0.2
   split_by: file
   seed: 0
+  # 每个文件先减去自己的 rest 基线（消除 trial / 天之间的整体漂移）
+  baseline_correction: true
 
 # VAE模型配置
 model:

@@ -36,6 +36,7 @@ class RealEMGDataset(Dataset):
         n_channels: int = 8,
         n_classes: int | None = None,
         seed: int = 0,
+        baseline_correction: bool = False,
     ) -> None:
         # 保存外部传入的数据配置。
         self.data_dir = Path(data_dir)
@@ -44,6 +45,10 @@ class RealEMGDataset(Dataset):
         self.n_channels = n_channels
         self.config_n_classes = n_classes
         self.seed = seed
+        # 是否对每个文件做 rest 基线校准（详见 _rest_baseline 的说明）。
+        self.baseline_correction = baseline_correction
+        # 记录每个文件减去的基线，方便之后检查。
+        self.baselines: dict[str, list[float]] = {}
 
         # 递归寻找所有 labeled CSV。
         file_paths = sorted(
@@ -101,6 +106,16 @@ class RealEMGDataset(Dataset):
             raw_signal = arr[:, :self.n_channels]
             # astype(np.int64)转换成整数
             labels = arr[:, self.n_channels].astype(np.int64)
+
+            # rest 基线校准：每个文件减去它自己的安静水平。
+            # 这样不同 trial / 不同天之间“整体偏高或偏低”的漂移会被消掉，
+            # 所有文件的 rest 都对齐到 0 附近。
+            # 注意要在切窗口之前做，后面的 emg_rms 也随之变成
+            # “比安静时多出来的活动量”。
+            if self.baseline_correction:
+                baseline = _rest_baseline(raw_signal, labels)
+                raw_signal = raw_signal - baseline
+                self.baselines[file_path.name] = baseline.tolist()
 
             # T 是当前文件包含的采样点数量。
             t = raw_signal.shape[0]
@@ -245,6 +260,40 @@ class RealEMGDataset(Dataset):
             "y": self.y[idx],
             "emg_rms": self.emg_rms[idx],
         }
+
+def _rest_baseline(
+    signal: np.ndarray,
+    labels: np.ndarray,
+    edge: int = 1000,
+) -> np.ndarray:
+    """计算一个文件中每个通道的 rest 基线（安静水平）。
+
+    做法：
+    1. 只看标签为 0（rest）的采样点；
+    2. 去掉文件开头和结尾各 edge 个点（默认 1000 点 = 0.5 秒），
+       因为 2 Hz filtfilt 在文件两端有边缘效应，那里的值不可靠；
+    3. 对每个通道取中位数。
+
+    为什么用中位数而不是平均值：
+    自动标注把动作结束后慢慢下降的“余尾”也标成了 rest，
+    这些点比真正的安静水平高。中位数不容易被这些少数偏高的点拉高。
+
+    返回形状 (C,)，每个通道一个数。
+    """
+    # 先找出所有 rest 的位置。
+    is_rest = labels == 0
+    # 去掉文件两端受滤波边缘效应影响的部分。
+    is_rest[:edge] = False
+    is_rest[-edge:] = False
+    # 万一去掉边缘后 rest 太少，就退回到使用全部 rest。
+    if is_rest.sum() < edge:
+        is_rest = labels == 0
+    # 一个 rest 点都没有时无法校准，直接报错提醒。
+    if not is_rest.any():
+        raise ValueError("文件中没有 rest（标签 0）的采样点，无法做基线校准")
+    # 每个通道取中位数，得到 (C,)。
+    return np.median(signal[is_rest], axis=0).astype(np.float32)
+
 
 def _stratum_from_name(name: str) -> str:
     """从文件名中提取trial1、trial2等分层名称。"""

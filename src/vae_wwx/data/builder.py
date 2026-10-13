@@ -27,5 +27,7 @@ def build_dataset(cfg: DataConfig, seed: int | None = None) -> Dataset:
             n_channels=cfg.channels,
             n_classes=cfg.n_classes,
             seed=actual_seed,
+            # 是否对每个文件做 rest 基线校准。
+            baseline_correction=cfg.baseline_correction,
         )
     raise ValueError(f"未対応のデータ名: {cfg.name}")

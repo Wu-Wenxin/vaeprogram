@@ -138,7 +138,7 @@ def main() -> None:
     plot_reconstruction_1d(
         sample["x"],
         outputs["x_hat"],
-        out / f"recon{plot_cfg}.png",
+        out / "recon.png",
         title=f"{cfg.name} recon{plot_cfg}",
     )
 
@@ -171,14 +171,14 @@ def main() -> None:
             plot_latent_scatter(
                 z,
                 y,
-                out / f"latent_{source_name}{plot_cfg}.png",
+                out / f"latent_{source_name}.png",
                 title=f"{source_name} latent{plot_cfg}",
             )
     # 绘制训练和验证损失曲线
     plot_loss_curves(
         history.train,
         history.val,
-        out / f"curves{plot_cfg}.png",
+        out / "curves.png",
         # 只画实际启用的损失，避免零权重项和空白子图。
         keys=["total", *[term.name for term in loss.terms]],
         title=f"losses{plot_cfg}",

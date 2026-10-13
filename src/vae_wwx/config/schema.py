@@ -45,6 +45,9 @@ class DataConfig:
         "file_stratified",
     ] = "file" # 数据划分方式
     seed: int = 0  # 控制训练集和验证集的随机划分
+    # 每个文件先减去自己的 rest 基线（各通道 rest 的中位数）再切窗口。
+    # 默认 False：没写这一项的旧配置 / 旧实验保持原来的行为，可以复现。
+    baseline_correction: bool = False
 
 
 @dataclass
