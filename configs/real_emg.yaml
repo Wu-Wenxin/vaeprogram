@@ -44,6 +44,8 @@ loss:
     weight: 0
     temperature: 0.1
     input: z  # 改为 z 可进行带采样噪声的对照实验
+    mode: class_mean  # learned=可学习的随机初始化 prototype；class_mean=各动作的平均方向
+    momentum: 0.9     # class_mean 时旧累计的保留比例
   # idleからの潜在距離と標準化前EMG RMSの相関を最大化する損失
   distance_activity:
     weight: 0.0

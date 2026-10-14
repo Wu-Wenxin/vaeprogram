@@ -90,6 +90,9 @@ def main() -> None:
             num_classes=cfg.data.n_classes - 1,
             idle_label=0,
             temperature=cfg.loss.angular_prototype.temperature,
+            # prototype 的决定方式（learned / class_mean）和移动平均的比例
+            mode=cfg.loss.angular_prototype.mode,
+            momentum=cfg.loss.angular_prototype.momentum,
         )
         # optimizerとcheckpointの対象に含めるため、modelへ登録する
         model.add_module(

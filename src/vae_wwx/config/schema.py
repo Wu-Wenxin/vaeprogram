@@ -171,6 +171,12 @@ class AngularPrototypeConfig:
     temperature: float = 0.1
     # 默认使用稳定的 mu；z 用于带采样噪声的对照实验。
     input: Literal["mu", "z"] = "mu"
+    # prototype 的决定方式：
+    #   learned    = 可学习参数、随机初始化（老师示例的做法，默认，旧实验可复现）
+    #   class_mean = 各动作当前的平均方向（按点数加权的移动平均，不接收梯度）
+    mode: Literal["learned", "class_mean"] = "learned"
+    # class_mean 时旧累计的保留比例（0.9 ≈ 由最近约 10 个 batch 决定）
+    momentum: float = 0.9
 
 
 @dataclass
